@@ -22,7 +22,7 @@
         <!-- Login Card -->
         <div class="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-100">
             <h2 class="text-xl font-bold text-slate-800 mb-1">Masuk ke Sistem</h2>
-            <p class="text-xs text-slate-500 mb-6">Gunakan kredensial akun Admin atau Staff Anda.</p>
+            <p class="text-xs text-slate-500 mb-6">Silakan masuk menggunakan akun yang telah terdaftar.</p>
 
             @if(session('success'))
                 <div class="mb-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium flex items-center space-x-2">
@@ -92,7 +92,7 @@
             <!-- Quick Login Helper for Assessment / Demo -->
             <div class="mt-6 pt-6 border-t border-slate-200">
                 <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center mb-2.5">
-                    <i class="fa-solid fa-bolt text-amber-500 mr-1"></i> Akun Demo untuk Dosen / Penguji
+                    <i class="fa-solid fa-bolt text-amber-500 mr-1"></i> Akun Demo
                 </p>
                 <div class="grid grid-cols-2 gap-2">
                     <button type="button" onclick="fillAccount('admin@inventory.test', 'password')"
