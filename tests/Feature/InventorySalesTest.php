@@ -318,7 +318,116 @@ class InventorySalesTest extends TestCase
     }
 
     /**
-     * 12. Search and Filter Test: Pencarian SKU dan filter kategori berfungsi.
+     * 13. Category CRUD & Relational Protection: Kategori terlindungi dari duplikasi dan tidak bisa dihapus jika ada produk.
+     */
+    public function test_category_crud_and_relational_deletion_protection(): void
+    {
+        // Duplicate name rejected
+        $dupResponse = $this->actingAs($this->admin)->post('/categories', [
+            'name' => 'Kategori Uji',
+        ]);
+        $dupResponse->assertSessionHasErrors('name');
+
+        // Cannot delete category that contains products
+        $delResponse = $this->actingAs($this->admin)->delete("/categories/{$this->category->id}");
+        $delResponse->assertSessionHas('error');
+        $this->assertDatabaseHas('categories', ['id' => $this->category->id]);
+    }
+
+    /**
+     * 14. Supplier CRUD & Relational Protection: Supplier tidak bisa dihapus jika memiliki riwayat transaksi pembelian.
+     */
+    public function test_supplier_cannot_be_deleted_if_has_purchases(): void
+    {
+        // Create a purchase for this supplier
+        Purchase::create([
+            'supplier_id' => $this->supplier->id,
+            'user_id' => $this->admin->id,
+            'purchase_number' => 'PO-TEST-DEL',
+            'total' => 100000,
+            'status' => 'completed',
+            'purchased_at' => now(),
+        ]);
+
+        $delResponse = $this->actingAs($this->admin)->delete("/suppliers/{$this->supplier->id}");
+        $delResponse->assertSessionHas('error');
+        $this->assertDatabaseHas('suppliers', ['id' => $this->supplier->id]);
+    }
+
+    /**
+     * 15. Purchase Cancellation Test: Pembatalan pembelian mengurangi stok kembali dan menolak jika stok tidak cukup.
+     */
+    public function test_purchase_cancellation_reverts_stock_and_prevents_negative(): void
+    {
+        // 1. Staff creates purchase for 10 units (stock 10 -> 20)
+        $this->actingAs($this->staff)->post('/purchases', [
+            'supplier_id' => $this->supplier->id,
+            'purchased_at' => now()->toDateString(),
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'quantity' => 10,
+                    'unit_cost' => 100000,
+                ]
+            ],
+        ]);
+        $this->product->refresh();
+        $this->assertEquals(20, $this->product->stock);
+
+        $purchase = Purchase::latest()->first();
+
+        // 2. Admin cancels purchase -> stock reverts (20 -> 10)
+        $cancelResponse = $this->actingAs($this->admin)->post("/purchases/{$purchase->id}/cancel");
+        $cancelResponse->assertSessionHasNoErrors();
+        $this->product->refresh();
+        $this->assertEquals(10, $this->product->stock);
+        $purchase->refresh();
+        $this->assertEquals('cancelled', $purchase->status);
+    }
+
+    /**
+     * 16. Soft Delete Test: Produk dengan riwayat transaksi di-soft delete secara aman (integritas FK terjaga).
+     */
+    public function test_product_with_transactions_is_soft_deleted_preserving_history(): void
+    {
+        // Create sale transaction for this product
+        $sale = Sale::create([
+            'user_id' => $this->staff->id,
+            'sale_number' => 'INV-TEST-SOFT',
+            'total' => 150000,
+            'status' => 'completed',
+            'sold_at' => now(),
+        ]);
+        $sale->items()->create([
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'unit_price' => 150000,
+            'subtotal' => 150000,
+        ]);
+
+        // Admin deletes product
+        $response = $this->actingAs($this->admin)->delete("/products/{$this->product->id}");
+        $response->assertSessionHas('success');
+
+        // Product should be soft-deleted (deleted_at is NOT null)
+        $this->assertSoftDeleted('products', ['id' => $this->product->id]);
+
+        // Sale item still points safely to the product
+        $this->assertDatabaseHas('sale_items', ['product_id' => $this->product->id]);
+    }
+
+    /**
+     * 17. User Management & Self Delete Protection: Admin tidak dapat menghapus akun sendiri.
+     */
+    public function test_admin_cannot_delete_own_account(): void
+    {
+        $response = $this->actingAs($this->admin)->delete("/users/{$this->admin->id}");
+        $response->assertSessionHas('error');
+        $this->assertDatabaseHas('users', ['id' => $this->admin->id]);
+    }
+
+    /**
+     * 18. Search and Filter Test: Pencarian SKU dan filter produk berfungsi.
      */
     public function test_product_search_and_filter(): void
     {
